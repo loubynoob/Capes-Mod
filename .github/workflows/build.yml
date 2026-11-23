@@ -1,1 +1,37 @@
+name: Build Blue Cape
 
+on: [push, workflow_dispatch]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Find the project (unzips any .zip in the repo)
+        run: |
+          shopt -s nullglob
+          for z in *.zip; do mkdir -p "_unzipped/${z%.zip}"; unzip -q -o "$z" -d "_unzipped/${z%.zip}"; done
+          BUILD_FILE=$(find . -name build.gradle -not -path './.git/*' | awk -F/ '{print NF, $0}' | sort -n | head -n 1 | cut -d' ' -f2-)
+          echo "Project is in: $(dirname "$BUILD_FILE")"
+          echo "PROJECT_DIR=$(dirname "$BUILD_FILE")" >> "$GITHUB_ENV"
+
+      - name: Install Gradle 9.2.1
+        run: |
+          wget -q https://services.gradle.org/distributions/gradle-9.2.1-bin.zip -O "$RUNNER_TEMP/gradle.zip"
+          unzip -q "$RUNNER_TEMP/gradle.zip" -d "$HOME"
+          echo "$HOME/gradle-9.2.1/bin" >> "$GITHUB_PATH"
+
+      - name: Build
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: gradle build --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BlueCape-jar
+          path: ${{ env.PROJECT_DIR }}/build/libs/*.jar
